@@ -53,7 +53,7 @@ class SoftwareDeploymentSettings(SoftwareDeploymentSettingsBase):
         },
     )
 
-
+@dataclass
 class EnvSpec(EnvSpecBase):
     # This class should implement something that describes an existing or to be created
     # environment.
@@ -71,16 +71,16 @@ class EnvSpec(EnvSpecBase):
     # the attribute EnvSpecSourceFile.path_or_uri (of type str) can be used to show
     # the original value passed to the EnvSpec.
 
+    # For now, use only named environments
+    envName: Optional[str] = None
+
     def __post_init__(self):
-        pass
+        if (self.envName is None):
+            raise WorkflowError("Exactly one of envName must be set.")
 
     @classmethod
     def identity_attributes(cls) -> Iterable[str]:
-        # Yield the attributes of this subclass that uniquely identify the
-        # environment spec. These are used for hashing and equality comparison.
-        # For example, the name of the env or the path to the environment definition
-        # file or the URI of the container, whatever this plugin uses.
-        ...
+        yield "envName"
 
     @classmethod
     def source_path_attributes(cls) -> Iterable[str]:
@@ -91,11 +91,8 @@ class EnvSpec(EnvSpecBase):
         ...
 
 
-# Required:
-# Implementation of an environment object.
-# If your environment cannot be archived or deployed, remove the respective methods
-# and the respective base classes.
-# All errors should be wrapped with snakemake-interface-common.errors.WorkflowError
+
+
 class Env(EnvBase, DeployableEnvBase, ArchiveableEnvBase):
     # For compatibility with future changes, you should not overwrite the __init__
     # method. Instead, use __post_init__ to set additional attributes and initialize
@@ -115,8 +112,7 @@ class Env(EnvBase, DeployableEnvBase, ArchiveableEnvBase):
         ...
 
     def decorate_shellcmd(self, cmd: str) -> str:
-        # Decorate given shell command such that it runs within the environment.
-        ...
+        return f"spack env activate {self.spec.envName} && {cmd}"
 
     def record_hash(self, hash_object) -> None:
         # Update given hash such that it changes whenever the environment
@@ -133,12 +129,17 @@ class Env(EnvBase, DeployableEnvBase, ArchiveableEnvBase):
         # hide those for clarity. In case of containers, it is also valid to
         # return the container URI as a "software".
         # Return an empty tuple () if no software can be reported.
-        ...
+        return [
+            SoftwareReport(
+                name="pacchetto",
+                version="1.0"
+            )
+        ]
 
     # The methods below are optional. Remove them if not needed and adjust the
     # base classes above.
 
-    async def deploy(self) -> None:
+    """async def deploy(self) -> None:
         # Remove method if not deployable!
         # Deploy the environment to self.deployment_path, using self.spec
         # (the EnvSpec object).
@@ -172,4 +173,4 @@ class Env(EnvBase, DeployableEnvBase, ArchiveableEnvBase):
         # self.run_cmd(cmd: str) -> subprocess.CompletedProcess in order to ensure that
         # it runs within eventual parent environments (e.g. a container or an env
         # module).
-        ...
+        ..."""
