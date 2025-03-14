@@ -1,5 +1,9 @@
 from dataclasses import dataclass, field
 from typing import Iterable, Optional
+import os
+import subprocess
+import yaml 
+import re
 from snakemake_interface_software_deployment_plugins.settings import (
     SoftwareDeploymentSettingsBase,
 )
@@ -98,10 +102,20 @@ class Env(EnvBase, DeployableEnvBase, ArchiveableEnvBase):
     # method. Instead, use __post_init__ to set additional attributes and initialize
     # futher stuff.
 
+    def run_cmd(self, cmd: str) -> subprocess.CompletedProcess:
+        process = subprocess.run(cmd, shell=True, check=True)
+        return process.stdout
+
+
     def __post_init__(self) -> None:
         # This is optional and can be removed if not needed.
         # Alternatively, you can e.g. prepare anything or set additional attributes.
         self.check()
+
+    def get_spack_env_yaml(self):
+        #$SPACK_ROOT/var/spack/environments/myenv/spack.yaml
+        SPACK_ROOT = os.environ.get("SPACK_ROOT")
+        return f"{SPACK_ROOT}/var/spack/environments/{self.spec.envName}/spack.yaml"
 
     # The decorator ensures that the decorated method is only called once
     # in case multiple environments of the same kind are created.
@@ -115,27 +129,29 @@ class Env(EnvBase, DeployableEnvBase, ArchiveableEnvBase):
         return f"spack env activate {self.spec.envName} && {cmd}"
 
     def record_hash(self, hash_object) -> None:
-        # Update given hash such that it changes whenever the environment
-        # could potentially contain a different set of software (in terms of versions or
-        # packages). Use self.spec (containing the corresponding EnvSpec object)
-        # to determine the hash.
-        hash_object.update(...)
+        env_yaml = self.get_spack_env_yaml()
+        with open(env_yaml, "r") as f:
+            hash_object.update(f.read().encode("utf-8"))
 
     def report_software(self) -> Iterable[SoftwareReport]:
-        # Report the software contained in the environment. This should be a list of
-        # snakemake_interface_software_deployment_plugins.SoftwareReport data class.
-        # Use SoftwareReport.is_secondary = True if the software is just some
-        # less important technical dependency. This allows Snakemake's report to
-        # hide those for clarity. In case of containers, it is also valid to
-        # return the container URI as a "software".
-        # Return an empty tuple () if no software can be reported.
-        return [
-            SoftwareReport(
-                name="pacchetto",
-                version="1.0"
-            )
-        ]
-
+        env_yaml = self.get_spack_env_yaml()
+        with open(env_yaml, "r") as f:
+            env_data = yaml.safe_load(f)
+        pattern = re.compile(r"^([^@^]+)@([\d\.]+)")
+        result = []
+        
+        for spec in env_data.get("spack", {}).get("specs", []):
+            match = pattern.match(spec)
+            if match:
+                name, version = match.groups()
+                result.append(
+                    SoftwareReport(
+                        name=name,
+                        version=version
+                    )
+                )
+        
+        return result
     # The methods below are optional. Remove them if not needed and adjust the
     # base classes above.
 
