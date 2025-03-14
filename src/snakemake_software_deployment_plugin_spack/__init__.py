@@ -15,24 +15,29 @@ from snakemake_interface_software_deployment_plugins import (
     SoftwareReport,
 )
 
-# Raise errors that will not be handled within this plugin but thrown upwards to
-# Snakemake and the user as WorkflowError.
 from snakemake_interface_common.exceptions import WorkflowError  # noqa: F401
 
 
-# Optional:
-# Define settings for your storage plugin (e.g. host url, credentials).
-# They will occur in the Snakemake CLI as --sdm-<plugin-name>-<param-name>
-# Make sure that all defined fields are 'Optional' and specify a default value
-# of None or anything else that makes sense in your case.
-# Note that we allow storage plugin settings to be tagged by the user. That means,
-# that each of them can be specified multiple times (an implicit nargs=+), and
-# the user can add a tag in front of each value (e.g. tagname1:value1 tagname2:value2).
-# This way, a storage plugin can be used multiple times within a workflow with different
-# settings.
+"""
+    Plugin for using Spack environments.
+    Current implementation:
+        - Supports only named environments
+            - Activated with `spack env activate <envName>`
+        - Uses the 'spack.yaml' file to access env information 
+            - For hashing 
+            - For reporting 
+        - CHECK: os.environ.get("SPACK_ROOT") is used to get the spack root directory.
+            - Check it is actually accessible.
+    TODO:
+        - Support yaml file for environment definition.
+        - Spack way of working seems similar to Conda in this way.
+        - Support for deployment
+            - Shouldn't be too hard, but it's better to first make sure everything is working fine.
+"""
+
 @dataclass
 class SoftwareDeploymentSettings(SoftwareDeploymentSettingsBase):
-    myparam: Optional[int] = field(
+    pack_parameter: Optional[int] = field(
         default=None,
         metadata={
             "help": "Some help text",
@@ -59,22 +64,6 @@ class SoftwareDeploymentSettings(SoftwareDeploymentSettingsBase):
 
 @dataclass
 class EnvSpec(EnvSpecBase):
-    # This class should implement something that describes an existing or to be created
-    # environment.
-    # It will be automatically added to the environment object when the environment is
-    # created or loaded and is available there as attribute self.spec.
-    # Use either __init__ with type annotations or dataclass attributes to define the
-    # spec.
-    # Any attributes that shall hold paths that are interpreted as relative to the
-    # workflow source (e.g. the path to an environment definition file), have to be
-    # defined as snakemake_interface_software_deployment_plugins.EnvSpecSourceFile.
-    # The reason is that Snakemake internally has to convert them from potential
-    # URLs or filesystem paths to cached versions.
-    # In the Env class below, they have to be accessed as EnvSpecSourceFile.cached
-    # (of type Path), when checking for existence. In case errors shall be thrown,
-    # the attribute EnvSpecSourceFile.path_or_uri (of type str) can be used to show
-    # the original value passed to the EnvSpec.
-
     # For now, use only named environments
     envName: Optional[str] = None
 
@@ -92,7 +81,7 @@ class EnvSpec(EnvSpecBase):
         # supposed to be interpreted as being relative to the defining rule.
         # For example, this would be attributes pointing to conda environment files.
         # Return empty list if no such attributes exist.
-        ...
+        return []
 
 
 
